@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SERM Snapshot</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-top">
+      <h1>SERM Snapshot</h1>
+      <button class="link-btn" id="btnToggleMode">Bulk mode →</button>
+    </div>
+    <div class="query-line" id="queryLine">No SERP detected</div>
+  </header>
+
+  <main id="main">
+    <div id="single-view">
+    <!-- State: no-serp -->
+    <section class="card state-card hidden" id="state-no-serp">
+      <h2>Open a Google search first</h2>
+      <p>Navigate to a Google SERP for your branded query, then re-open this panel.</p>
+    </section>
+
+    <!-- State: model unavailable -->
+    <section class="card state-card hidden" id="state-unavailable">
+      <h2>Local model unavailable</h2>
+      <p>Your machine doesn't meet Chrome's requirements for the on-device Prompt API.</p>
+      <ul class="reqs">
+        <li>Chrome 138+ on desktop</li>
+        <li>22 GB free disk space</li>
+        <li>GPU with &gt; 4 GB VRAM, or CPU with 16 GB+ RAM and 4+ cores</li>
+        <li>Unmetered network for the one-time model download</li>
+      </ul>
+      <p>Open <code>chrome://on-device-internals</code> for diagnostics, or read the <a href="https://developer.chrome.com/docs/ai/prompt-api" target="_blank" rel="noopener">Prompt API docs</a>.</p>
+    </section>
+
+    <!-- State: model downloadable -->
+    <section class="card state-card hidden" id="state-downloadable">
+      <h2>Download Gemini Nano (~2 GB)</h2>
+      <p>One-time download. After this, all analysis runs locally with no network calls.</p>
+      <button class="primary" id="btnDownload">Download model</button>
+    </section>
+
+    <!-- State: model downloading -->
+    <section class="card state-card hidden" id="state-downloading">
+      <h2>Downloading model…</h2>
+      <p class="muted">This is a one-time download. Keep this panel open.</p>
+      <div class="progress"><div class="progress-bar" id="downloadBar"></div></div>
+      <div class="muted small" id="downloadPercent">0%</div>
+    </section>
+
+    <!-- Brand context form -->
+    <section class="card hidden" id="brandForm">
+      <h2 id="brandFormTitle">Tell me about this brand</h2>
+      <label>
+        <span>Brand name</span>
+        <input type="text" id="brandName" placeholder="e.g., Example" autocomplete="off" />
+      </label>
+      <label>
+        <span>One-sentence description</span>
+        <textarea id="brandDescription" rows="2" placeholder="e.g., B2B HR analytics SaaS for European mid-market"></textarea>
+      </label>
+      <label>
+        <span>Official domains <span class="muted small">(one per line)</span></span>
+        <textarea id="officialDomains" rows="2" placeholder="example.com"></textarea>
+      </label>
+      <label>
+        <span>Official social handles <span class="muted small">(optional, one per line)</span></span>
+        <textarea id="socialHandles" rows="2" placeholder="@example&#10;linkedin.com/company/example"></textarea>
+      </label>
+      <div class="row">
+        <button class="primary" id="brandSave">Save</button>
+        <button class="ghost hidden" id="brandCancel">Cancel</button>
+      </div>
+    </section>
+
+    <!-- Brand context summary -->
+    <section class="card hidden" id="brandSummary">
+      <div class="summary-row">
+        <div>
+          <div class="muted small">Brand</div>
+          <div id="summaryBrandName"></div>
+        </div>
+        <button class="ghost small" id="brandEdit">Edit</button>
+      </div>
+      <div class="muted small" id="summaryBrandDescription"></div>
+    </section>
+
+    <!-- Ready -->
+    <section class="card hidden" id="state-ready">
+      <button class="primary big" id="btnAnalyze">Analyze SERP</button>
+    </section>
+
+    <!-- Analyzing -->
+    <section class="card state-card hidden" id="state-analyzing">
+      <h2>Analyzing…</h2>
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="muted small" id="progressLine">Extracting blocks…</p>
+    </section>
+
+    <!-- Error -->
+    <section class="card state-card hidden" id="state-error">
+      <h2>Something went wrong</h2>
+      <p id="errorWhat"></p>
+      <p class="muted small" id="errorHint"></p>
+      <button class="ghost" id="btnDismissError">Dismiss</button>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="hidden">
+      <div class="card score-card">
+        <div class="score-number" id="scoreNumber">—</div>
+        <div class="score-label">Reputation Score</div>
+      </div>
+
+      <div class="card">
+        <h3>Sentiment breakdown</h3>
+        <div class="sentiment-row" id="sentimentRow"></div>
+        <div class="muted small" id="analyzedLine"></div>
+      </div>
+
+      <div class="card">
+        <h3>Top risks <span class="muted small" id="riskCount"></span></h3>
+        <ul class="risks" id="risksList"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Brand control</h3>
+        <ul class="control" id="controlList"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Block-by-block</h3>
+        <ul class="blocks" id="blocksList"></ul>
+      </div>
+
+      <div class="actions">
+        <button class="ghost" id="btnReanalyze">Re-analyze</button>
+        <div class="export-wrap">
+          <button class="ghost" id="btnExport" aria-haspopup="true" aria-expanded="false">Export ▾</button>
+          <ul class="export-menu hidden" id="exportMenu" role="menu">
+            <li><button data-format="markdown" role="menuitem">Markdown</button></li>
+            <li><button data-format="json" role="menuitem">JSON</button></li>
+            <li><button data-format="csv" role="menuitem">CSV</button></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+    </div><!-- /#single-view -->
+
+    <div id="bulk-view" class="hidden">
+      <!-- Brand context summary mirrors the single-mode one. We render it from JS
+           so it stays in sync. -->
+      <section class="card hidden" id="bulkBrandSummary">
+        <div class="summary-row">
+          <div>
+            <div class="muted small">Brand</div>
+            <div id="bulkSummaryBrandName"></div>
+          </div>
+          <button class="ghost small" id="bulkBrandEdit">Edit</button>
+        </div>
+        <div class="muted small" id="bulkSummaryBrandDescription"></div>
+      </section>
+
+      <!-- Bulk form -->
+      <section class="card" id="bulkForm">
+        <h2>Bulk analysis</h2>
+        <p class="muted small">
+          Each query opens a background tab, runs extraction + local analysis, then closes the tab.
+          Sequential — Gemini Nano can't parallelize. Keep this panel open. ETA ~30s per query.
+        </p>
+        <label>
+          <span>Queries (one per line)</span>
+          <textarea id="bulkQueries" rows="6" placeholder="brand name&#10;brand name review&#10;is brand name legit"></textarea>
+        </label>
+        <button class="primary" id="btnRunBulk">Run bulk</button>
+      </section>
+
+      <!-- Bulk running -->
+      <section class="card hidden" id="bulkRunning">
+        <h2>Bulk in progress</h2>
+        <div class="progress"><div class="progress-bar" id="bulkBar"></div></div>
+        <p class="muted small" id="bulkProgressLine">Starting…</p>
+        <ul class="bulk-list" id="bulkList"></ul>
+        <button class="ghost" id="btnCancelBulk">Cancel</button>
+      </section>
+
+      <!-- Bulk done -->
+      <section class="card hidden" id="bulkDone">
+        <h2>Bulk complete</h2>
+        <p class="muted small" id="bulkDoneSummary"></p>
+        <ul class="bulk-list" id="bulkDoneList"></ul>
+        <div class="row">
+          <button class="ghost" id="btnExportBulkJson">Export JSON</button>
+          <button class="ghost" id="btnExportBulkCsv">Export CSV</button>
+          <button class="ghost" id="btnNewBulk">New bulk</button>
+        </div>
+      </section>
+    </div><!-- /#bulk-view -->
+  </main>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
